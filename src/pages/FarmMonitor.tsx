@@ -62,6 +62,7 @@ export default function FarmMonitor() {
   const [polygon, setPolygon] = useState<[number, number][]>(DEFAULT_POLYGON);
   const [farmSize, setFarmSize] = useState<number>(40);
   const [locError, setLocError] = useState<string>("");
+  const [coordInput, setCoordInput] = useState<string>("12.9736, 77.5971");
 
   const updatePolygon = (lat: number, lng: number, sizeInAcres: number) => {
     if (sizeInAcres <= 0) return;
@@ -87,6 +88,7 @@ export default function FarmMonitor() {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
           setCenter([lat, lng]);
+          setCoordInput(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
           updatePolygon(lat, lng, farmSize);
         },
         (error) => {
@@ -214,6 +216,30 @@ export default function FarmMonitor() {
             
             {step === 0 && (
               <div className="mb-6 space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Farmer Location (Lat, Lng)</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={coordInput}
+                      onChange={(e) => {
+                        setCoordInput(e.target.value);
+                        const coords = e.target.value.split(',');
+                        if (coords.length === 2) {
+                          const lat = parseFloat(coords[0].trim());
+                          const lng = parseFloat(coords[1].trim());
+                          if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            setCenter([lat, lng]);
+                            updatePolygon(lat, lng, farmSize);
+                          }
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-mono text-sm text-slate-900 transition-all"
+                      placeholder="e.g. 12.8069, 74.9321"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Farm Size</label>
                   <div className="relative">

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../supabaseClient';
 import { LayoutDashboard, Users, FolderKanban, ShoppingCart, CheckCircle, XCircle, Moon, Sun, ArrowRight, ShieldCheck } from 'lucide-react';
 import { mockProjects } from '../data/projects';
 
@@ -17,33 +18,87 @@ const mockCredits = [
 export default function AdminPanel() {
   const [isDark, setIsDark] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [farmers, setFarmers] = useState(mockFarmers);
+  const [farmers, setFarmers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [credits, setCredits] = useState(mockCredits);
 
-  const approveFarmer = (id: number) => {
+  useEffect(() => {
+    fetchFarmers();
+  }, []);
+
+  const fetchFarmers = async () => {
+    const { data, error } = await supabase
+      .from("farms")
+      .select("*");
+
+    if (error) {
+      console.error("Error fetching farmers:", error);
+    } else {
+      setFarmers(data);
+    }
+
+    setLoading(false);
+  };
+
+  const approveFarmer = async (id: number) => {
     const farmer = farmers.find(f => f.id === id);
     if (farmer) {
+      const { error } = await supabase
+        .from("farms")
+        .update({ status: "approved" })
+        .eq("id", id);
+        
+      if (error) {
+        console.error("Error updating status:", error);
+        alert("Failed to approve farmer in database.");
+        return;
+      }
+
+      const farmerName = `Farmer #${farmer.id}`;
+      const farmerLocation = farmer.latitude && farmer.longitude 
+        ? `${farmer.latitude.toFixed(4)}, ${farmer.longitude.toFixed(4)}` 
+        : 'Unknown Location';
+        
       const newProject = {
         id: Date.now(),
-        name: `${farmer.name} Project`,
-        location: farmer.location,
-        type: farmer.type,
-        available: "5,000 CC",
+        name: `${farmerName} Project`,
+        location: farmerLocation,
+        type: farmer.practice || "Unknown",
+        available: `${farmer.carbon || 0} CC`,
         pricePerCredit: 25.00,
-        description: `Verified ${farmer.type} project by ${farmer.name}.`,
-        farmer: farmer.name,
+        description: `Verified ${farmer.practice} project by ${farmerName}.`,
+        farmer: farmerName,
         image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=800",
-        coords: [20.5937, 78.9629] as [number, number],
+        coords: [farmer.latitude || 20.5937, farmer.longitude || 78.9629] as [number, number],
         verified: "Verified by Admin"
       };
       mockProjects.push(newProject);
+
+      const newCredit = {
+        id: Date.now(),
+        project: `${farmerName} Project`,
+        credits: `${farmer.carbon || 0} CC`,
+        price: `$25.00/t`,
+        status: "Pending Review"
+      };
+      setCredits(prev => [...prev, newCredit]);
+
       setFarmers(farmers.filter(f => f.id !== id));
-      alert(`${farmer.name} approved! Their project is now listed in the Marketplace.`);
+      alert(`${farmerName} approved! Their project is now listed in Market Control.`);
     }
   };
 
-  const rejectFarmer = (id: number) => {
-    setFarmers(farmers.filter(f => f.id !== id));
+  const rejectFarmer = async (id: number) => {
+    const { error } = await supabase
+      .from("farms")
+      .update({ status: "rejected" })
+      .eq("id", id);
+      
+    if (!error) {
+      setFarmers(farmers.filter(f => f.id !== id));
+    } else {
+      console.error("Error rejecting farmer:", error);
+    }
   };
 
   const approveCredit = (id: number) => {
@@ -99,7 +154,7 @@ export default function AdminPanel() {
             <ArrowRight className="w-4 h-4 -rotate-45" /> +12 this week
           </p>
         </div>
-        
+
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
           <div className="flex justify-between items-start">
             <div>
@@ -130,6 +185,40 @@ export default function AdminPanel() {
           </p>
         </div>
       </div>
+
+      <div>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-4">Farmer Details</h2>
+
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          <table border="1" cellPadding="10" className="w-full text-left text-sm bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest">
+              <tr>
+                <th className="px-6 py-5">ID</th>
+                <th className="px-6 py-5">Area</th>
+                <th className="px-6 py-5">Trees</th>
+                <th className="px-6 py-5">Species</th>
+                <th className="px-6 py-5">Carbon</th>
+                <th className="px-6 py-5">Practice</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {farmers.map((farmer) => (
+                <tr key={farmer.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
+                  <td className="px-6 py-5 font-bold text-slate-900 dark:text-white">{farmer.id}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.area}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.trees}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.species}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.carbon}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.practice}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 
@@ -156,16 +245,20 @@ export default function AdminPanel() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
               {farmers.map((farmer) => (
                 <tr key={farmer.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/20 transition-colors">
-                  <td className="px-6 py-5 font-bold text-slate-900 dark:text-white">{farmer.name}</td>
-                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.location}</td>
-                  <td className="px-6 py-5">
-                    <span className="block text-slate-900 dark:text-white font-bold">{farmer.size}</span>
-                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">{farmer.type}</span>
+                  <td className="px-6 py-5 font-bold text-slate-900 dark:text-white">Farmer #{farmer.id}</td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">
+                    {farmer.latitude && farmer.longitude ? `${farmer.latitude.toFixed(4)}, ${farmer.longitude.toFixed(4)}` : 'Unknown Location'}
                   </td>
-                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">{farmer.submissionDate}</td>
+                  <td className="px-6 py-5">
+                    <span className="block text-slate-900 dark:text-white font-bold">{farmer.area} Acres</span>
+                    <span className="block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">{farmer.practice || farmer.type}</span>
+                  </td>
+                  <td className="px-6 py-5 text-slate-500 dark:text-slate-400 font-medium">
+                    {farmer.created_at ? new Date(farmer.created_at).toLocaleDateString() : 'N/A'}
+                  </td>
                   <td className="px-6 py-5">
                     <span className="px-3 py-1.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-full text-[10px] font-black uppercase tracking-widest">
-                      {farmer.status}
+                      {farmer.status || 'Pending'}
                     </span>
                   </td>
                   <td className="px-6 py-5 flex items-center justify-end gap-2">
@@ -282,7 +375,7 @@ export default function AdminPanel() {
   return (
     <div className={`min-h-[calc(100vh-80px)] transition-colors duration-200 font-sans ${isDark ? 'dark' : ''}`}>
       <div className="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-[calc(100vh-80px)] transition-colors duration-200 flex flex-col md:flex-row">
-        
+
         {/* Sidebar Navigation */}
         <aside className="w-full md:w-72 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 flex flex-col">
           <div className="p-8">
@@ -292,45 +385,41 @@ export default function AdminPanel() {
             </h2>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-2">System Management</p>
           </div>
-          
+
           <nav className="px-4 pb-8 space-y-2 flex-grow">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
-                activeTab === 'dashboard' 
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm' 
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === 'dashboard'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-              }`}
+                }`}
             >
               <LayoutDashboard className="w-5 h-5" /> Dashboard
             </button>
             <button
               onClick={() => setActiveTab('verification')}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
-                activeTab === 'verification' 
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm' 
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === 'verification'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-              }`}
+                }`}
             >
               <Users className="w-5 h-5" /> Farmer Verification
             </button>
             <button
               onClick={() => setActiveTab('projects')}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
-                activeTab === 'projects' 
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm' 
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === 'projects'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-              }`}
+                }`}
             >
               <FolderKanban className="w-5 h-5" /> Project Management
             </button>
             <button
               onClick={() => setActiveTab('marketplace')}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${
-                activeTab === 'marketplace' 
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm' 
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-bold text-sm transition-all ${activeTab === 'marketplace'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-              }`}
+                }`}
             >
               <ShoppingCart className="w-5 h-5" /> Marketplace Control
             </button>
@@ -347,9 +436,9 @@ export default function AdminPanel() {
           </div>
         </main>
 
-        <button 
+        <button
           onClick={toggleDarkMode}
-          className="fixed bottom-6 right-6 p-4 bg-white dark:bg-slate-800 rounded-full shadow-xl border border-slate-200 dark:border-slate-700 hover:scale-110 active:scale-95 transition-all z-50" 
+          className="fixed bottom-6 right-6 p-4 bg-white dark:bg-slate-800 rounded-full shadow-xl border border-slate-200 dark:border-slate-700 hover:scale-110 active:scale-95 transition-all z-50"
         >
           {isDark ? (
             <Sun className="w-6 h-6 text-yellow-400" />
