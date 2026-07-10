@@ -36,14 +36,52 @@ function MapResizer() {
 }
 
 import { mockProjects } from "../data/projects";
+import { supabase } from "../supabaseClient";
 
 export default function Marketplace() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
+  const [projects, setProjects] = useState(mockProjects);
 
-  const filteredProjects = mockProjects.filter(project => {
+  useEffect(() => {
+    const fetchApprovedFarms = async () => {
+      const { data, error } = await supabase
+        .from('farms')
+        .select('*')
+        .eq('status', 'approved');
+        
+      if (!error && data) {
+        const approvedProjects = data.map(farmer => {
+          const farmerName = `Farmer #${farmer.id}`;
+          const farmerLocation = farmer.latitude && farmer.longitude 
+            ? `${farmer.latitude.toFixed(4)}, ${farmer.longitude.toFixed(4)}` 
+            : 'India';
+            
+          return {
+            id: farmer.id + 1000, // ensure unique ID from mock projects
+            name: `${farmerName} Project`,
+            location: farmerLocation,
+            type: farmer.practice || "Unknown",
+            available: `${farmer.carbon || 0} CC`,
+            pricePerCredit: 25.00,
+            description: `Verified ${farmer.practice} project by ${farmerName}.`,
+            farmer: farmerName,
+            image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=800",
+            coords: [farmer.latitude || 20.5937, farmer.longitude || 78.9629] as [number, number],
+            verified: "Verified by Admin"
+          };
+        });
+        
+        setProjects([...mockProjects, ...approvedProjects]);
+      }
+    };
+    
+    fetchApprovedFarms();
+  }, []);
+
+  const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          project.location.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterType === "All" || project.type === filterType;

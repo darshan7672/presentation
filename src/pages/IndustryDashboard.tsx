@@ -35,8 +35,9 @@ const DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
+import { supabase } from "../supabaseClient";
 
-const portfolioLocations = [
+const initialPortfolioLocations = [
   { id: 1, name: "Agroforestry Initiative", location: "Punjab, India", coords: [31.1471, 75.3412] as [number, number], credits: 150 },
   { id: 2, name: "Solar Farm Integration", location: "Gujarat, India", coords: [22.2587, 71.1924] as [number, number], credits: 175 },
 ];
@@ -55,12 +56,88 @@ export default function IndustryDashboard() {
   const [electricity, setElectricity] = useState("");
   const [fuel, setFuel] = useState("");
   const [emissions, setEmissions] = useState<number | null>(null);
+  const [portfolioLocations, setPortfolioLocations] = useState(initialPortfolioLocations);
+  const [calculating, setCalculating] = useState(false);
+  const [calcError, setCalcError] = useState<string | null>(null);
 
-  const handleCalculate = (e: FormEvent) => {
+  useEffect(() => {
+    const fetchApprovedFarms = async () => {
+      const { data, error } = await supabase
+        .from('farms')
+        .select('*')
+        .eq('status', 'approved');
+        
+      if (!error && data) {
+        const approvedProjects = data.map(farmer => {
+          const farmerName = `Farmer #${farmer.id}`;
+          const farmerLocation = farmer.latitude && farmer.longitude 
+            ? `${farmer.latitude.toFixed(4)}, ${farmer.longitude.toFixed(4)}` 
+            : 'India';
+            
+          return {
+            id: farmer.id + 1000, // ensure unique ID from mock projects
+            name: `${farmerName} Project`,
+            location: farmerLocation,
+            coords: [farmer.latitude || 20.5937, farmer.longitude || 78.9629] as [number, number],
+            credits: farmer.carbon || 0
+          };
+        });
+        
+        setPortfolioLocations([...initialPortfolioLocations, ...approvedProjects]);
+      }
+    };
+    
+    fetchApprovedFarms();
+  }, []);
+
+  const handleCalculate = async (e: FormEvent) => {
     e.preventDefault();
-    // Formula from PRD: emission = electricity * 0.82
-    const calculated = parseFloat(electricity) * 0.82 + (parseFloat(fuel) || 0) * 2.3; // Added arbitrary fuel factor for demo
-    setEmissions(calculated);
+    setCalculating(true);
+    setCalcError(null);
+
+    const calcElectricity = parseFloat(electricity) || 0;
+    const calcFuel = parseFloat(fuel) || 0;
+    const calculated = calcElectricity * 0.82 + calcFuel * 2.3;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("You must be logged in to store emissions.");
+      }
+
+      const { data: industry, error: industryError } = await supabase
+        .from("industries")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (industryError) throw industryError;
+
+      const industryId = industry.id;
+      const currentMonth = new Date().toLocaleString('default', { month: 'short' });
+      const currentYear = new Date().getFullYear();
+
+      const { error } = await supabase
+        .from("industry_emissions")
+        .insert([{
+          industry_id: industryId,
+          report_month: currentMonth,
+          report_year: currentYear,
+          electricity: calcElectricity,
+          fuel: calcFuel,
+          transport: 0,
+          total_emission: calculated,
+        }]);
+
+      if (error) throw error;
+
+      setEmissions(calculated);
+    } catch (err: any) {
+      console.error("Error storing emissions:", err);
+      setCalcError(err.message || "Failed to store emissions. Please try again.");
+    } finally {
+      setCalculating(false);
+    }
   };
 
   return (
@@ -74,7 +151,7 @@ export default function IndustryDashboard() {
       <div className="max-w-7xl mx-auto space-y-16 relative z-10">
         
         {/* Header Section with Asymmetrical Layout */}
-        <div className="flex flex-col lg:flex-row justify-between items-start gap-10 mb-16">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-10 mb-16">
           <div className="max-w-3xl">
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
@@ -87,6 +164,20 @@ export default function IndustryDashboard() {
             <h1 className="text-6xl font-display font-black text-slate-900 mb-6 tracking-tighter leading-none">Industry <span className="text-gradient-emerald">Analytics Portal</span></h1>
             <p className="text-xl text-slate-500 leading-relaxed font-medium max-w-2xl">Analyze your institutional carbon footprint and manage your ESG roadmap with verified, high-integrity offsets.</p>
           </div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex-shrink-0"
+          >
+            <Link
+              to="/industry/profile"
+              className="btn-primary !px-6 !py-4 text-xs font-black uppercase tracking-widest flex items-center gap-2.5 shadow-xl shadow-emerald-950/10"
+            >
+              <Factory className="w-4 h-4" />
+              Company Profile
+            </Link>
+          </motion.div>
         </div>
 
         {/* Header Stats - Tonal Layering */}
@@ -167,11 +258,25 @@ export default function IndustryDashboard() {
                   placeholder="e.g. 500"
                 />
               </div>
+              {calcError && (
+                <div className="p-4 bg-red-50 text-red-600 text-xs font-bold rounded-xl border border-red-100 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  {calcError}
+                </div>
+              )}
               <button
                 type="submit"
-                className="btn-emerald w-full !py-4.5 !rounded-2xl shadow-xl shadow-emerald-900/10"
+                disabled={calculating}
+                className="btn-emerald w-full !py-4.5 !rounded-2xl shadow-xl shadow-emerald-900/10 flex items-center justify-center gap-2 disabled:opacity-80"
               >
-                Process Emissions
+                {calculating ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Process Emissions"
+                )}
               </button>
             </form>
 

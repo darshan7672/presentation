@@ -20,6 +20,7 @@ import Confirmation from "./pages/Confirmation";
 import Logout from "./pages/Logout";
 import AdminPanel from "./pages/AdminPanel";
 import FarmMonitor from "./pages/FarmMonitor";
+import IndustryProfile from "./pages/IndustryProfile";
 
 /* 🔐 PROTECTED ROUTE (ROLE-BASED ACCESS CONTROL) */
 function ProtectedRoute(props: { children: JSX.Element; allowedRoles?: string[] }) {
@@ -101,6 +102,15 @@ function AppContent() {
           element={
             <ProtectedRoute allowedRoles={["industry"]}>
               <IndustryDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/industry/profile"
+          element={
+            <ProtectedRoute allowedRoles={["industry"]}>
+              <IndustryProfile />
             </ProtectedRoute>
           }
         />
