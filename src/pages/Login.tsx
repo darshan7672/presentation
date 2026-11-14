@@ -47,13 +47,26 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState<string[]>(["", "", "", "", "", ""]);
   const [resendTimer, setResendTimer] = useState(0);
 
-  const navigateBasedOnRole = (userRole: string) => {
+  const navigateBasedOnRole = async (userRole: string, userId: string) => {
     if (userRole === "admin") {
+      localStorage.setItem("activeRole", "admin");
       navigate("/admin");
     } else if (userRole === "farmer") {
       navigate("/farmer");
     } else {
-      navigate("/industry");
+      // For industry users: check if they've already set up their company profile.
+      // If not, send them to the profile setup page first.
+      const { data: industryRecord } = await supabase
+        .from("industries")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (industryRecord) {
+        navigate("/industry");
+      } else {
+        navigate("/industry/profile");
+      }
     }
   };
 
@@ -78,6 +91,7 @@ export default function Login() {
           {
             id: userId,
             role: role,
+            ...(name ? { full_name: name } : {}),
           },
         ]);
 
@@ -87,7 +101,7 @@ export default function Login() {
         return;
       }
       isExplicitAction.current = false;
-      navigateBasedOnRole(role);
+      await navigateBasedOnRole(role, userId);
     } else {
       if (enforceRole && profile.role !== role) {
         isExplicitAction.current = false;
@@ -96,7 +110,7 @@ export default function Login() {
         return;
       }
       isExplicitAction.current = false;
-      navigateBasedOnRole(profile.role);
+      await navigateBasedOnRole(profile.role, userId);
     }
   };
 
@@ -106,6 +120,9 @@ export default function Login() {
 
     if (roleParam === "farmer" || roleParam === "industry" || roleParam === "admin") {
       setRole(roleParam);
+    } else if (searchParams.has("admin")) {
+      // Supports /login?admin and /login?admin=true
+      setRole("admin");
     }
     if (modeParam === "login" || modeParam === "register") {
       setMode(modeParam);
@@ -206,6 +223,7 @@ export default function Login() {
           {
             id: data.user.id,
             role: role,
+            ...(name ? { full_name: name } : {}),
           },
         ]);
       if (profileError) {
@@ -346,8 +364,25 @@ export default function Login() {
     e.preventDefault();
 
     if (mode === "login") {
-      if (role === "admin" && (email.toLowerCase() !== "admin@gmail.com" || password !== "admin123")) {
-        alert("Access Denied: Invalid admin credentials.");
+      const normalizedEmail = email.trim().toLowerCase();
+      const isAdminLogin = role === "admin" || normalizedEmail === "admin@gmail.com";
+
+      if (isAdminLogin) {
+        if (normalizedEmail !== "admin@gmail.com" || password !== "admin123") {
+          alert("Access Denied: Invalid admin credentials. Default credentials are admin@gmail.com / admin123");
+          return;
+        }
+        setRole("admin");
+        isExplicitAction.current = false;
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (error || !data?.user) {
+          console.warn("Supabase admin sign-in fallback to local demo mode:", error?.message);
+        }
+        localStorage.setItem("activeRole", "admin");
+        navigate("/admin");
         return;
       }
       isExplicitAction.current = true;
@@ -393,14 +428,14 @@ export default function Login() {
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-slate-50/50 font-sans flex flex-col items-center justify-center p-6">
-      <div className="max-w-4xl w-full grid md:grid-cols-2 bg-white rounded-[2.5rem] shadow-2xl shadow-emerald-900/10 overflow-hidden border border-slate-100">
+      <div className="max-w-4xl w-full grid md:grid-cols-2 bg-white rounded-[2.5rem] shadow-premium-hover shadow-emerald-900/10 overflow-hidden border border-slate-100">
         {/* Left Side: Form */}
         <div className="p-10 md:p-14">
           <div className="flex items-center gap-3 text-emerald-600 mb-10 group cursor-pointer" onClick={() => navigate("/")}>
             <div className="bg-emerald-500 p-2 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
               <Leaf className="size-6 text-white" />
             </div>
-            <span className="text-2xl font-black tracking-tighter text-slate-900">CarbonX</span>
+            <span className="text-2xl font-extrabold tracking-tight text-slate-900">CarbonX</span>
           </div>
 
           <AnimatePresence mode="wait">
@@ -413,7 +448,7 @@ export default function Login() {
                 className="space-y-6"
               >
                 <div>
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none text-left">
+                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-none text-left">
                     Verify Your Email
                   </h1>
                   <p className="text-slate-500 mt-3 font-medium text-left">
@@ -431,14 +466,14 @@ export default function Login() {
                       value={digit}
                       onChange={(e) => handleOtpChange(index, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                      className="size-10 md:size-12 text-center text-xl font-black text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
+                      className="size-10 md:size-12 text-center text-xl font-extrabold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all"
                     />
                   ))}
                 </div>
 
                 <button
                   onClick={handleVerifyOtp}
-                  className="btn-emerald w-full !py-4 !rounded-2xl shadow-xl shadow-emerald-900/10"
+                  className="btn-emerald w-full !py-4 !rounded-xl shadow-premium-hover shadow-emerald-900/10"
                 >
                   Verify & Create Account
                 </button>
@@ -459,7 +494,7 @@ export default function Login() {
                   ) : (
                     <button
                       onClick={handleResendOtp}
-                      className="text-emerald-600 hover:text-emerald-700 font-black transition-colors"
+                      className="text-emerald-600 hover:text-emerald-700 font-extrabold transition-colors"
                     >
                       Resend OTP
                     </button>
@@ -475,7 +510,7 @@ export default function Login() {
                 className="space-y-6"
               >
                 <div>
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none text-left">
+                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-none text-left">
                     Reset Password
                   </h1>
                   <p className="text-slate-500 mt-3 font-medium text-left font-semibold">
@@ -485,7 +520,7 @@ export default function Login() {
 
                 <form onSubmit={handleForgotPassword} className="space-y-6">
                   <div className="text-left">
-                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Email Address</label>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Email Address</label>
                     <div className="relative group">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                       <input
@@ -493,7 +528,7 @@ export default function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
                         placeholder="name@company.com"
                       />
                     </div>
@@ -501,7 +536,7 @@ export default function Login() {
 
                   <button
                     type="submit"
-                    className="btn-emerald w-full !py-4.5 !rounded-2xl shadow-xl shadow-emerald-900/10"
+                    className="btn-emerald w-full !py-4.5 !rounded-xl shadow-premium-hover shadow-emerald-900/10"
                   >
                     Send Reset Link
                   </button>
@@ -510,7 +545,7 @@ export default function Login() {
                 <div className="text-center mt-6">
                   <button
                     onClick={() => setMode("login")}
-                    className="text-xs font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors"
+                    className="text-xs font-extrabold uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors"
                   >
                     ← Back to Sign In
                   </button>
@@ -525,7 +560,7 @@ export default function Login() {
                 className="space-y-6"
               >
                 <div>
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none text-left">
+                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-none text-left">
                     Create New Password
                   </h1>
                   <p className="text-slate-500 mt-3 font-medium text-left font-semibold">
@@ -535,7 +570,7 @@ export default function Login() {
 
                 <form onSubmit={handleResetPassword} className="space-y-6">
                   <div className="text-left">
-                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">New Password</label>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">New Password</label>
                     <div className="relative group">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                       <input
@@ -543,7 +578,7 @@ export default function Login() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="w-full pl-12 pr-12 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
+                        className="w-full pl-12 pr-12 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
                         placeholder="••••••••"
                       />
                       <button
@@ -558,7 +593,7 @@ export default function Login() {
 
                   <button
                     type="submit"
-                    className="btn-emerald w-full !py-4.5 !rounded-2xl shadow-xl shadow-emerald-900/10"
+                    className="btn-emerald w-full !py-4.5 !rounded-xl shadow-premium-hover shadow-emerald-900/10"
                   >
                     Update Password
                   </button>
@@ -572,7 +607,7 @@ export default function Login() {
                 exit={{ opacity: 0, x: 20 }}
               >
                 <div className="mb-10">
-                  <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none text-left">
+                  <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight leading-none text-left">
                     {mode === "login" ? "Welcome Back" : "Join CarbonX"}
                   </h1>
                   <p className="text-slate-500 mt-3 font-medium text-left">
@@ -580,12 +615,13 @@ export default function Login() {
                   </p>
                 </div>
 
+
                 {/* Role Toggle */}
-                <div className="flex p-1.5 bg-slate-100/80 rounded-2xl mb-10 border border-slate-200/50">
+                <div className="flex p-1.5 bg-slate-100/80 rounded-xl mb-6 border border-slate-200/50">
                   <button
                     type="button"
                     onClick={() => setRole("industry")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${role === "industry"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all ${role === "industry"
                         ? "bg-white text-emerald-600 shadow-md shadow-emerald-900/5"
                         : "text-slate-500 hover:text-slate-700"
                       }`}
@@ -596,7 +632,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setRole("farmer")}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${role === "farmer"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all ${role === "farmer"
                         ? "bg-white text-emerald-600 shadow-md shadow-emerald-900/5"
                         : "text-slate-500 hover:text-slate-700"
                       }`}
@@ -604,20 +640,37 @@ export default function Login() {
                     <Leaf className="size-4" />
                     Farmer
                   </button>
-                  {(searchParams.get("role") === "admin" || searchParams.get("admin") === "true" || role === "admin") && (
+                  <button
+                    type="button"
+                    onClick={() => setRole("admin")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all ${role === "admin"
+                        ? "bg-white text-emerald-600 shadow-md shadow-emerald-900/5"
+                        : "text-slate-500 hover:text-slate-700"
+                      }`}
+                  >
+                    <ShieldCheck className="size-4" />
+                    Admin
+                  </button>
+                </div>
+
+                {role === "admin" && (
+                  <div className="mb-6 p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs transition-all">
+                    <div className="flex items-center gap-2 text-emerald-900 font-semibold">
+                      <ShieldCheck className="size-4 text-emerald-600 shrink-0" />
+                      <span>Admin Demo: <strong className="font-extrabold">admin@gmail.com</strong> / <strong className="font-extrabold">admin123</strong></span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setRole("admin")}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${role === "admin"
-                          ? "bg-white text-emerald-600 shadow-md shadow-emerald-955/5"
-                          : "text-slate-500 hover:text-slate-700"
-                        }`}
+                      onClick={() => {
+                        setEmail("admin@gmail.com");
+                        setPassword("admin123");
+                      }}
+                      className="text-[11px] font-extrabold text-emerald-700 bg-white border border-emerald-300 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors shadow-2xs cursor-pointer"
                     >
-                      <ShieldCheck className="size-4" />
-                      Admin
+                      Fill Credentials
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <form onSubmit={handleAuth} className="space-y-6">
                   <AnimatePresence>
@@ -629,7 +682,7 @@ export default function Login() {
                         className="space-y-6 overflow-hidden"
                       >
                         <div className="text-left">
-                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Full Name</label>
+                          <label className="block text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Full Name</label>
                           <div className="relative group">
                             <User className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                             <input
@@ -637,7 +690,7 @@ export default function Login() {
                               value={name}
                               onChange={(e) => setName(e.target.value)}
                               required
-                              className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
+                              className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
                               placeholder="John Doe"
                             />
                           </div>
@@ -646,7 +699,7 @@ export default function Login() {
                     )}
                   </AnimatePresence>
                   <div className="text-left">
-                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Email Address</label>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2.5 ml-1">Email Address</label>
                     <div className="relative group">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                       <input
@@ -654,7 +707,7 @@ export default function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
                         placeholder="name@company.com"
                       />
                     </div>
@@ -662,12 +715,12 @@ export default function Login() {
 
                   <div className="text-left">
                     <div className="flex justify-between items-center mb-2.5 ml-1">
-                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Password</label>
+                      <label className="block text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400">Password</label>
                       {mode === "login" && (
                         <button
                           type="button"
                           onClick={() => setMode("forgot-password")}
-                          className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors"
+                          className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 hover:text-emerald-700 transition-colors"
                         >
                           Forgot Password?
                         </button>
@@ -680,7 +733,7 @@ export default function Login() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="w-full pl-12 pr-12 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
+                        className="w-full pl-12 pr-12 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-medium placeholder:text-slate-300"
                         placeholder="••••••••"
                       />
                       <button
@@ -702,7 +755,7 @@ export default function Login() {
 
                   <button
                     type="submit"
-                    className="btn-emerald w-full !py-4.5 !rounded-2xl shadow-xl shadow-emerald-900/10"
+                    className="btn-emerald w-full !py-4.5 !rounded-xl shadow-premium-hover shadow-emerald-900/10"
                   >
                     {mode === "login" ? "Sign In to Dashboard" : "Create Your Account"}
                   </button>
@@ -713,14 +766,14 @@ export default function Login() {
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-slate-100"></div>
                     </div>
-                    <span className="relative px-6 bg-white text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Or continue with</span>
+                    <span className="relative px-6 bg-white text-[10px] font-extrabold text-slate-300 uppercase tracking-[0.3em]">Or continue with</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-5">
                     <button
                       type="button"
                       onClick={() => handleOAuthLogin("google")}
-                      className="flex items-center justify-center gap-3 py-3.5 border border-slate-200 rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all font-bold text-slate-600 text-sm active:scale-95"
+                      className="flex items-center justify-center gap-3 py-3.5 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all font-bold text-slate-600 text-sm active:scale-95"
                     >
                       <Chrome className="size-5" />
                       Google
@@ -728,7 +781,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => handleOAuthLogin("github")}
-                      className="flex items-center justify-center gap-3 py-3.5 border border-slate-200 rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all font-bold text-slate-600 text-sm active:scale-95"
+                      className="flex items-center justify-center gap-3 py-3.5 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all font-bold text-slate-600 text-sm active:scale-95"
                     >
                       <Github className="size-5" />
                       GitHub
@@ -740,7 +793,7 @@ export default function Login() {
                   {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
                   <button
                     onClick={() => setMode(mode === "login" ? "register" : "login")}
-                    className="font-black text-emerald-600 hover:text-emerald-700 transition-colors"
+                    className="font-extrabold text-emerald-600 hover:text-emerald-700 transition-colors"
                   >
                     {mode === "login" ? "Create Account" : "Sign In"}
                   </button>
@@ -759,10 +812,10 @@ export default function Login() {
 
           <div className="relative h-full flex flex-col justify-between z-10">
             <div>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-10">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-extrabold uppercase tracking-widest mb-10">
                 Institutional Carbon Market
               </div>
-              <h2 className="text-5xl font-black text-white leading-[1.1] mb-8 tracking-tighter">
+              <h2 className="text-5xl font-extrabold text-white leading-[1.1] mb-8 tracking-tight">
                 Bridging the gap between <span className="text-emerald-400">Industry</span> and <span className="text-emerald-400">Nature</span>.
               </h2>
               <p className="text-slate-400 text-xl leading-relaxed font-medium">
@@ -772,7 +825,7 @@ export default function Login() {
 
             <div className="space-y-8">
               <div className="flex items-center gap-5 group cursor-default">
-                <div className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-all">
+                <div className="size-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-all">
                   <ShieldCheck className="text-emerald-400 size-7" />
                 </div>
                 <div>
@@ -781,7 +834,7 @@ export default function Login() {
                 </div>
               </div>
               <div className="flex items-center gap-5 group cursor-default">
-                <div className="size-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-all">
+                <div className="size-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20 transition-all">
                   <Verified className="text-emerald-400 size-7" />
                 </div>
                 <div>
@@ -791,7 +844,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="pt-10 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-[0.2em] font-black">
+            <div className="pt-10 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-[0.2em] font-extrabold">
               <span>© 2026 CarbonX</span>
               <div className="flex gap-6">
                 <span className="hover:text-white transition-colors cursor-pointer">Privacy</span>
@@ -814,7 +867,7 @@ export default function Login() {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-slate-100 flex flex-col items-center"
+              className="bg-white rounded-xl p-8 max-w-sm w-full text-center shadow-premium-hover border border-slate-100 flex flex-col items-center"
             >
               <div className="relative mb-6">
                 <div className="size-20 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin"></div>
@@ -826,7 +879,7 @@ export default function Login() {
                   )}
                 </div>
               </div>
-              <h3 className="text-xl font-black text-slate-900 mb-2">
+              <h3 className="text-xl font-extrabold text-slate-900 mb-2">
                 Signing in with {oauthState.provider === "google" ? "Google" : "GitHub"}
               </h3>
               <p className="text-slate-500 font-semibold text-sm animate-pulse">

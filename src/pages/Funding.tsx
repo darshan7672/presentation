@@ -1,9 +1,28 @@
 import React, { useState, FormEvent } from "react";
-import { DollarSign, Send, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  DollarSign,
+  Send,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+  ShieldCheck,
+  Trees,
+  Sprout,
+  HelpCircle,
+  AlertCircle
+} from "lucide-react";
+import PortalLayout from "../components/PortalLayout";
 
 export default function Funding() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const [fullName, setFullName] = useState("Rameshwar Kisan");
+  const [farmSize, setFarmSize] = useState("15");
+  const [requestedAmount, setRequestedAmount] = useState("75000");
+  const [purpose, setPurpose] = useState(
+    "Procurement of 600 high-density teak and neem saplings, organic biochar preparation, and drip irrigation line installation."
+  );
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -11,97 +30,127 @@ export default function Funding() {
     setTimeout(() => {
       setIsSubmitting(false);
       setIsSuccess(true);
-    }, 2000);
+    }, 1200);
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-slate-50/50 p-4 sm:p-6 lg:p-12 font-sans relative overflow-hidden">
-      {/* Decorative Background Elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -right-24 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="max-w-3xl mx-auto space-y-12 relative z-10">
-        <div className="text-center mb-16">
-          <div className="w-24 h-24 bg-white/80 backdrop-blur-sm rounded-[2rem] flex items-center justify-center mx-auto mb-8 border border-slate-100 shadow-xl shadow-emerald-900/5">
-            <DollarSign className="w-10 h-10 text-emerald-500" />
+    <PortalLayout
+      portalRole="farmer"
+      activeTab="wallet"
+      title="Capital Grants & Pre-Financing Support"
+      subtitle="Apply for upfront capital and equipment financing to transition into verified agroforestry without high upfront debt."
+    >
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Information Callout */}
+        <div className="bg-white rounded-xl border border-emerald-200 p-6 shadow-2xs flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#16A34A] flex items-center justify-center flex-shrink-0">
+            <Sprout className="w-5 h-5" />
           </div>
-          <h1 className="text-5xl font-display font-black text-slate-900 mb-4 tracking-tight">Capital <span className="text-gradient-emerald">Deployment</span></h1>
-          <p className="text-lg text-slate-500 leading-relaxed max-w-2xl mx-auto font-medium">Apply for institutional-grade initial capital and resources to remove entry barriers and accelerate your carbon sequestration infrastructure.</p>
+          <div>
+            <h3 className="text-sm font-bold text-[#14532D]">0% Interest Transition Grants</h3>
+            <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
+              CarbonX climate partners and institutional CSR funds provide grant pre-financing. Funds are disbursed directly to accredited nurseries or equipment providers, and recouped naturally as your future carbon credits mature.
+            </p>
+          </div>
         </div>
 
         {isSuccess ? (
-          <div className="card-premium p-12 border-none bg-white/80 backdrop-blur-sm text-center animate-in fade-in zoom-in duration-500 !rounded-[2.5rem]">
-            <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-500/20">
-              <CheckCircle2 className="w-12 h-12 text-white" />
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-10 text-center shadow-2xs space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#16A34A] flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Application Registered</h2>
-            <p className="text-slate-500 mb-10 leading-relaxed font-medium">Our institutional review committee will evaluate your funding request. Expect a formal response within 3-5 business days.</p>
-            <button 
-              onClick={() => setIsSuccess(false)}
-              className="bg-slate-900 hover:bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.96] shadow-xl shadow-slate-900/10"
-            >
-              Submit New Request
-            </button>
+            <h2 className="text-xl font-bold text-[#1F2937]">Funding Application Registered!</h2>
+            <p className="text-xs text-[#64748B] max-w-md mx-auto leading-relaxed">
+              Your grant application of <strong>₹{Number(requestedAmount).toLocaleString("en-IN")}</strong> has been received by our agricultural committee. An officer will visit your village within 3 business days for site confirmation.
+            </p>
+            <div className="pt-4">
+              <button
+                onClick={() => setIsSuccess(false)}
+                className="px-6 py-2.5 rounded-lg bg-[#14532D] text-white text-xs font-bold hover:bg-[#166534]"
+              >
+                Submit Another Request
+              </button>
+            </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="card-premium p-12 border-none bg-white/80 backdrop-blur-sm space-y-10 !rounded-[2.5rem]">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 ml-1 group-focus-within:text-emerald-500 transition-colors">Full Name</label>
-                <input 
-                  required 
-                  type="text" 
-                  className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300 shadow-inner" 
-                  placeholder="John Doe" 
+          <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-[#E5E7EB] p-8 shadow-2xs space-y-5">
+            <h3 className="text-base font-bold text-[#1F2937] pb-3 border-b border-[#E5E7EB]">
+              Grant Application Form
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block font-bold text-[#1F2937] mb-1">Applicant Name</label>
+                <input
+                  required
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 font-semibold text-[#1F2937] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30"
                 />
               </div>
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 ml-1 group-focus-within:text-emerald-500 transition-colors">Farm Size (Acres)</label>
-                <input 
-                  required 
-                  type="number" 
-                  className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300 shadow-inner" 
-                  placeholder="e.g. 15" 
+
+              <div>
+                <label className="block font-bold text-[#1F2937] mb-1">Farm Size (Acres)</label>
+                <input
+                  required
+                  type="number"
+                  value={farmSize}
+                  onChange={(e) => setFarmSize(e.target.value)}
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 font-semibold text-[#1F2937] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-[#1F2937] mb-1">
+                  Requested Grant Capital (INR ₹)
+                </label>
+                <input
+                  required
+                  type="number"
+                  value={requestedAmount}
+                  onChange={(e) => setRequestedAmount(e.target.value)}
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 font-semibold text-[#1F2937] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30"
+                />
+                <p className="text-[10px] text-[#64748B] mt-1">Recommended grant cap: ₹5,000 per acre</p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-[#1F2937] mb-1">
+                  Operational Utilization Plan
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 font-semibold text-[#1F2937] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 resize-none"
                 />
               </div>
             </div>
-            
-            <div className="group">
-              <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 ml-1 group-focus-within:text-emerald-500 transition-colors">Requested Capital (USD)</label>
-              <input 
-                required 
-                type="number" 
-                className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300 shadow-inner" 
-                placeholder="e.g. 5000" 
-              />
-            </div>
 
-            <div className="group">
-              <label className="block text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3 ml-1 group-focus-within:text-emerald-500 transition-colors">Strategic Purpose</label>
-              <textarea 
-                required 
-                rows={4} 
-                className="w-full px-6 py-4 bg-slate-50/50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none resize-none transition-all font-bold placeholder:text-slate-300 shadow-inner" 
-                placeholder="Detail your operational deployment plan (e.g., infrastructure procurement, irrigation systems)..."
-              ></textarea>
+            <div className="flex justify-end pt-4 border-t border-[#E5E7EB]">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 rounded-lg bg-[#14532D] hover:bg-[#166534] text-white text-xs font-bold flex items-center gap-2 shadow-xs transition-colors disabled:opacity-60"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#84CC16]" />
+                    <span>Submitting Application...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 text-[#84CC16]" />
+                    <span>Submit Grant Request</span>
+                  </>
+                )}
+              </button>
             </div>
-
-            <button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="bg-slate-900 hover:bg-emerald-600 text-white w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-[0.96] shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-70"
-            >
-              {isSubmitting ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
-              ) : (
-                <><Send className="w-5 h-5" /> Submit Application</>
-              )}
-            </button>
           </form>
         )}
       </div>
-    </div>
+    </PortalLayout>
   );
 }

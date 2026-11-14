@@ -1,33 +1,42 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { 
-  Factory, 
-  Building, 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Activity, 
-  Save, 
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Factory,
+  Building,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Activity,
+  Save,
   ArrowRight,
   ShieldCheck,
-  TrendingUp
+  Globe,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Sparkles,
+  Zap
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { supabase } from "../supabaseClient";
+import PortalLayout from "../components/PortalLayout";
 
 export default function IndustryProfile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form states divided by sections
+  // Form states
   // Section 1: Company Information
   const [companyName, setCompanyName] = useState("");
-  const [industryType, setIndustryType] = useState("");
+  const [industryType, setIndustryType] = useState("Manufacturing");
   const [gstNumber, setGstNumber] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [website, setWebsite] = useState("");
 
   // Section 2: Contact Information
   const [contactPerson, setContactPerson] = useState("");
@@ -41,14 +50,17 @@ export default function IndustryProfile() {
   const [country, setCountry] = useState("India");
   const [pinCode, setPinCode] = useState("");
 
-
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Section 4: Operational & ESG Profile
+  const [annualProduction, setAnnualProduction] = useState("50,000 MT");
+  const [renewableEnergyPct, setRenewableEnergyPct] = useState("35%");
+  const [esgCompliance, setEsgCompliance] = useState("ISO 14064 & GRI Compliant");
+  const [netZeroTargetYear, setNetZeroTargetYear] = useState("2035");
 
   useEffect(() => {
     async function checkUserAndFetchProfile() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
 
         if (!user) {
           navigate("/login");
@@ -58,22 +70,19 @@ export default function IndustryProfile() {
         setUserId(user.id);
         setEmail(user.email || "");
 
-        // Try to fetch existing industry profile to prepopulate
+        // Fetch existing profile if available
         const { data, error } = await supabase
           .from("industries")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (error) {
-          console.warn("Could not fetch existing profile, might not exist yet:", error);
-        }
-
         if (data) {
           setCompanyName(data.company_name || "");
-          setIndustryType(data.industry_type || "");
+          setIndustryType(data.industry_type || "Manufacturing");
           setGstNumber(data.gst_number || "");
           setRegistrationNumber(data.registration_number || "");
+          setWebsite(data.website || "https://www.tatagreen.com");
           setContactPerson(data.contact_person || "");
           setEmail(data.email || user.email || "");
           setPhone(data.phone || "");
@@ -82,10 +91,9 @@ export default function IndustryProfile() {
           setState(data.state || "");
           setCountry(data.country || "India");
           setPinCode(data.pin_code || "");
-
         }
       } catch (err) {
-        console.error("Error loading user profile:", err);
+        console.error("Error loading profile:", err);
       } finally {
         setFetching(false);
       }
@@ -97,6 +105,7 @@ export default function IndustryProfile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
     setLoading(true);
 
     if (!userId) {
@@ -105,29 +114,14 @@ export default function IndustryProfile() {
       return;
     }
 
-    // Basic Validations
-    if (!companyName || !industryType || !gstNumber || !registrationNumber) {
-      setErrorMessage("Please fill all Company Information fields.");
+    if (!companyName || !gstNumber || !contactPerson) {
+      setErrorMessage("Please complete the required company name, GST, and contact person fields.");
       setLoading(false);
       return;
     }
-
-    if (!contactPerson || !email || !phone) {
-      setErrorMessage("Please fill all Contact Information fields.");
-      setLoading(false);
-      return;
-    }
-
-    if (!address || !city || !state || !pinCode) {
-      setErrorMessage("Please fill all Address fields.");
-      setLoading(false);
-      return;
-    }
-
-
 
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         user_id: userId,
         company_name: companyName,
         industry_type: industryType,
@@ -141,25 +135,22 @@ export default function IndustryProfile() {
         state: state,
         country: country,
         pin_code: pinCode,
-
         updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase
         .from("industries")
-        .upsert([payload], {
-          onConflict: "user_id"
-        });
+        .upsert([payload], { onConflict: "user_id" });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      // Success and redirect
-      navigate("/industry");
+      setSuccessMessage("Company profile successfully updated and synchronized!");
+      setTimeout(() => {
+        navigate("/industry");
+      }, 1200);
     } catch (err: any) {
       console.error("Error saving company profile:", err);
-      setErrorMessage(err.message || "Failed to save company profile. Please try again.");
+      setErrorMessage(err.message || "Failed to save profile. Please check database permissions.");
     } finally {
       setLoading(false);
     }
@@ -167,308 +158,321 @@ export default function IndustryProfile() {
 
   if (fetching) {
     return (
-      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center bg-slate-50/50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-emerald-600 animate-spin" />
-          <p className="text-slate-500 font-bold text-sm tracking-wider uppercase">Loading Profile Info...</p>
+      <div className="min-h-screen bg-[#F8FAF7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-[#14532D] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+            Loading Company Profile...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-slate-50/50 p-4 sm:p-6 lg:p-12 font-sans relative overflow-hidden">
-      {/* Background patterns */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-24 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="max-w-5xl mx-auto relative z-10 space-y-12">
-        {/* Header */}
-        <div className="max-w-3xl">
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-[0.2em] mb-6 border border-emerald-500/20"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Industrial Compliance Setup</span>
-          </motion.div>
-          <h1 className="text-5xl font-display font-black text-slate-900 tracking-tighter leading-none mb-4">
-            Company <span className="text-gradient-emerald">Profile</span>
-          </h1>
-          <p className="text-lg text-slate-500 font-medium leading-relaxed max-w-xl">
-            Configure your organization details, sustainability credentials, and regulatory numbers to register in the verified carbon ecosystem.
-          </p>
+    <PortalLayout
+      portalRole="industry"
+      activeTab="profile"
+      title="Company Profile & ESG Compliance"
+      subtitle="Maintain verified institutional records, corporate tax IDs, and ESG net-zero commitment targets."
+      actions={
+        <Link
+          to="/industry"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-[#E5E7EB] text-xs font-semibold text-[#1F2937] hover:bg-[#F8FAF7] transition-colors"
+        >
+          <span>Back to Dashboard</span>
+        </Link>
+      }
+    >
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Verification Alert Banner */}
+        <div className="bg-white rounded-xl border border-emerald-200 p-5 shadow-2xs flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#16A34A] flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-[#14532D]">Enterprise ESG Verification: Active</p>
+              <p className="text-[11px] text-[#64748B] mt-0.5">
+                Verified entities are qualified to retire carbon credits and receive official SEBI-compliant certificates.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            Audit Level 2
+          </span>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-10">
+        {successMessage && (
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-[#14532D] flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Section 1: Company Information */}
-          <motion.div 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="card-premium p-8 sm:p-10 bg-white/95 backdrop-blur-sm border-none shadow-premium relative overflow-hidden"
-          >
-            <div className="flex items-center gap-4 mb-8">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
-                <Factory className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-display font-black text-slate-900">Company Information</h3>
-                <p className="text-xs text-slate-400 font-medium">Verify legal status and identity</p>
-              </div>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-[#E5E7EB]">
+              <Factory className="w-4 h-4 text-[#14532D]" />
+              <h3 className="text-sm font-bold text-[#1F2937]">1. Company Information</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Company Name</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                    placeholder="e.g. Sterling Steel Industries"
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Company Legal Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Tata Steel Green Initiatives Ltd."
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
+                />
               </div>
 
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Industry Type</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Industry Sector *</label>
                 <select
-                  required
                   value={industryType}
                   onChange={(e) => setIndustryType(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold cursor-pointer"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
                 >
-                  <option value="" disabled>Select Industry Type</option>
-                  <option value="Manufacturing">Manufacturing</option>
-                  <option value="Energy & Utilities">Energy & Utilities</option>
-                  <option value="Chemicals">Chemicals</option>
-                  <option value="Automotive">Automotive</option>
-                  <option value="Logistics & Transport">Logistics & Transport</option>
-                  <option value="Textiles">Textiles</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Agriculture & Food">Agriculture & Food</option>
-                  <option value="Other">Other</option>
+                  <option value="Manufacturing">Heavy Manufacturing & Metals</option>
+                  <option value="Energy & Utilities">Energy, Power & Utilities</option>
+                  <option value="Cement & Construction">Cement & Infrastructure</option>
+                  <option value="Chemicals & Fertilizers">Chemicals & Fertilizers</option>
+                  <option value="Automotive & Transport">Automotive & Transport</option>
+                  <option value="Textiles & Consumer">Textiles & FMCG</option>
+                  <option value="Technology & Data Centers">Technology & Data Centers</option>
                 </select>
               </div>
 
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">GST Number</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">GST Number *</label>
                 <input
                   type="text"
                   required
                   value={gstNumber}
                   onChange={(e) => setGstNumber(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300 uppercase"
-                  placeholder="e.g. 27AAACS1085F1Z5"
-                  maxLength={15}
+                  placeholder="27AAACT2727Q1ZW"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
                 />
               </div>
 
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Registration Number</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">CIN / Registration Number</label>
                 <input
                   type="text"
-                  required
                   value={registrationNumber}
                   onChange={(e) => setRegistrationNumber(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. L01631MH2021PLC35799"
+                  placeholder="CIN-U27100MH2020PLC123456"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Corporate Website</label>
+                <input
+                  type="url"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://www.yourcompany.com"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
                 />
               </div>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Section 2: Contact Information */}
-          <motion.div 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="card-premium p-8 sm:p-10 bg-white/95 backdrop-blur-sm border-none shadow-premium"
-          >
-            <div className="flex items-center gap-4 mb-8">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
-                <User className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-display font-black text-slate-900">Contact Information</h3>
-                <p className="text-xs text-slate-400 font-medium">Primary point of communication</p>
-              </div>
+          {/* Section 2: Contact Person */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-[#E5E7EB]">
+              <User className="w-4 h-4 text-[#14532D]" />
+              <h3 className="text-sm font-bold text-[#1F2937]">2. Sustainability Contact Officer</h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Contact Person</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Contact Officer Name *</label>
                 <input
                   type="text"
                   required
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. Devendra Sharma"
+                  placeholder="Dr. Arvind Mehta"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
                 />
               </div>
 
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Email Address</label>
-                <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                  <input
-                    type="email"
-                    required
-                    readOnly
-                    value={email}
-                    className="w-full pl-11 pr-5 py-4 bg-slate-100 border border-slate-200 rounded-xl outline-none transition-all font-bold text-slate-500 cursor-not-allowed"
-                    placeholder="email@company.com"
-                  />
-                </div>
-              </div>
-
-              <div className="group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Phone Number</label>
-                <div className="relative group">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full pl-11 pr-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                    placeholder="e.g. +91 9876543210"
-                  />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Section 3: Address */}
-          <motion.div 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="card-premium p-8 sm:p-10 bg-white/95 backdrop-blur-sm border-none shadow-premium"
-          >
-            <div className="flex items-center gap-4 mb-8">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
-                <MapPin className="w-6 h-6 text-emerald-600" />
-              </div>
               <div>
-                <h3 className="text-xl font-display font-black text-slate-900">Address Details</h3>
-                <p className="text-xs text-slate-400 font-medium">Headquarters or main operations facility</p>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Official Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="sustainability@company.com"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Direct Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98200 12345"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
+                />
               </div>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              <div className="md:col-span-12 group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Street Address</label>
+          {/* Section 3: Registered Address */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-[#E5E7EB]">
+              <MapPin className="w-4 h-4 text-[#14532D]" />
+              <h3 className="text-sm font-bold text-[#1F2937]">3. Headquarters & Facility Address</h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="sm:col-span-4">
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Facility Address</label>
                 <input
                   type="text"
-                  required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. 402, Block A, Industrial Area Phase II"
+                  placeholder="Plot 42, Green Industrial Corridor, Phase 2"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16A34A]/30 focus:border-[#16A34A]"
                 />
               </div>
 
-              <div className="md:col-span-3 group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">City</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">City</label>
                 <input
                   type="text"
-                  required
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. Pune"
+                  placeholder="Mumbai"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
                 />
               </div>
 
-              <div className="md:col-span-3 group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">State</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">State</label>
                 <input
                   type="text"
-                  required
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. Maharashtra"
+                  placeholder="Maharashtra"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
                 />
               </div>
 
-              <div className="md:col-span-3 group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">Country</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Country</label>
                 <input
                   type="text"
-                  required
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. India"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
                 />
               </div>
 
-              <div className="md:col-span-3 group">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2.5 ml-1">PIN Code</label>
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">PIN Code</label>
                 <input
                   type="text"
-                  required
                   value={pinCode}
                   onChange={(e) => setPinCode(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all font-bold placeholder:text-slate-300"
-                  placeholder="e.g. 411014"
+                  placeholder="400001"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
                 />
               </div>
             </div>
-          </motion.div>
+          </div>
 
+          {/* Section 4: ESG & Net-Zero Target */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-[#E5E7EB]">
+              <Sparkles className="w-4 h-4 text-[#84CC16]" />
+              <h3 className="text-sm font-bold text-[#1F2937]">4. ESG Milestones & Target Framework</h3>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Annual Production Volume</label>
+                <input
+                  type="text"
+                  value={annualProduction}
+                  onChange={(e) => setAnnualProduction(e.target.value)}
+                  placeholder="e.g. 100,000 Metric Tons"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
+                />
+              </div>
 
-          {/* Error Message */}
-          {errorMessage && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-5 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-bold shadow-sm"
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Renewable Energy Percentage</label>
+                <input
+                  type="text"
+                  value={renewableEnergyPct}
+                  onChange={(e) => setRenewableEnergyPct(e.target.value)}
+                  placeholder="e.g. 40%"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">ESG Compliance Standard</label>
+                <input
+                  type="text"
+                  value={esgCompliance}
+                  onChange={(e) => setEsgCompliance(e.target.value)}
+                  placeholder="e.g. ISO 14064-1 / GRI / SEBI BRSR"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#1F2937] mb-1">Net-Zero Target Year</label>
+                <input
+                  type="text"
+                  value={netZeroTargetYear}
+                  onChange={(e) => setNetZeroTargetYear(e.target.value)}
+                  placeholder="e.g. 2035"
+                  className="w-full bg-[#F8FAF7] border border-[#E5E7EB] rounded-lg px-3.5 py-2.5 text-xs text-[#1F2937] font-semibold focus:bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Action Bar */}
+          <div className="flex items-center justify-end gap-3 pt-4">
+            <Link
+              to="/industry"
+              className="px-5 py-2.5 rounded-lg border border-[#E5E7EB] bg-white text-xs font-semibold text-[#1F2937] hover:bg-[#F8FAF7]"
             >
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-              <p>{errorMessage}</p>
-            </motion.div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-4">
-            <button
-              type="button"
-              onClick={() => navigate("/industry")}
-              className="w-full sm:w-auto px-8 py-4 rounded-xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-100 hover:text-slate-700 transition-all text-xs uppercase tracking-widest"
-            >
-              Cancel & Back
-            </button>
+              Cancel
+            </Link>
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-10 py-5 rounded-xl bg-slate-900 text-white hover:bg-emerald-600 active:scale-95 transition-all text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-75"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#14532D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors disabled:opacity-60"
             >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Saving Profile...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Company Profile
-                </>
-              )}
+              <Save className="w-4 h-4 text-[#84CC16]" />
+              <span>{loading ? "Saving Changes..." : "Save Company Profile"}</span>
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </PortalLayout>
   );
 }

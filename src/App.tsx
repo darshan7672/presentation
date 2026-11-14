@@ -4,23 +4,33 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "./supabaseClient";
 
 import Navbar from "./components/Navbar";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import FarmerDashboard from "./pages/FarmerDashboard";
-import IndustryDashboard from "./pages/IndustryDashboard";
-import Marketplace from "./pages/Marketplace";
-import Training from "./pages/Training";
-import Funding from "./pages/Funding";
-import Checkout from "./pages/Checkout";
-import Confirmation from "./pages/Confirmation";
-import Logout from "./pages/Logout";
-import AdminPanel from "./pages/AdminPanel";
-import FarmMonitor from "./pages/FarmMonitor";
-import IndustryProfile from "./pages/IndustryProfile";
+
+// Route-based code splitting
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const FarmerDashboard = lazy(() => import("./pages/FarmerDashboard"));
+const IndustryDashboard = lazy(() => import("./pages/IndustryDashboard"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
+const Training = lazy(() => import("./pages/Training"));
+const Funding = lazy(() => import("./pages/Funding"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const Confirmation = lazy(() => import("./pages/Confirmation"));
+const Logout = lazy(() => import("./pages/Logout"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+const FarmMonitor = lazy(() => import("./pages/FarmMonitor"));
+const IndustryProfile = lazy(() => import("./pages/IndustryProfile"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+}
 
 /* 🔐 PROTECTED ROUTE (ROLE-BASED ACCESS CONTROL) */
 function ProtectedRoute(props: { children: JSX.Element; allowedRoles?: string[] }) {
@@ -30,40 +40,55 @@ function ProtectedRoute(props: { children: JSX.Element; allowedRoles?: string[] 
 
   useEffect(() => {
     async function checkAuth() {
-      const { data } = await supabase.auth.getUser();
-
-      if (!data?.user) {
-        navigate("/login");
-        return;
-      }
-
-      if (allowedRoles && allowedRoles.length > 0) {
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single();
-
-        if (error || !profile) {
-          navigate("/login");
-          return;
-        }
-
-        // Superuser admin role bypasses all role constraints.
-        // Other roles are restricted to the allowed roles list.
-        if (profile.role !== "admin" && !allowedRoles.includes(profile.role)) {
-          if (profile.role === "farmer") {
-            navigate("/farmer");
-          } else if (profile.role === "industry") {
-            navigate("/industry");
-          } else {
-            navigate("/");
+      try {
+        const activeRole = localStorage.getItem("activeRole");
+        if (activeRole) {
+          if (activeRole === "admin" || !allowedRoles || allowedRoles.length === 0 || allowedRoles.includes(activeRole)) {
+            setChecking(false);
+            return;
           }
-          return;
         }
-      }
 
-      setChecking(false);
+        const { data } = await supabase.auth.getUser();
+
+        if (!data?.user) {
+          if (!activeRole) {
+            navigate("/login");
+            return;
+          }
+        }
+
+        if (data?.user && allowedRoles && allowedRoles.length > 0) {
+          const { data: profile, error } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", data.user.id)
+            .single();
+
+          if (error || !profile) {
+            navigate("/login");
+            return;
+          }
+
+          // Superuser admin role bypasses all role constraints.
+          // Other roles are restricted to the allowed roles list.
+          if (profile.role !== "admin" && !allowedRoles.includes(profile.role)) {
+            if (profile.role === "farmer") {
+              navigate("/farmer");
+            } else if (profile.role === "industry") {
+              navigate("/industry");
+            } else {
+              navigate("/");
+            }
+            return;
+          }
+        }
+
+        setChecking(false);
+      } catch (err) {
+        console.error("ProtectedRoute auth check failed:", err);
+        navigate("/login");
+      }
     }
 
     checkAuth();
@@ -76,108 +101,119 @@ function ProtectedRoute(props: { children: JSX.Element; allowedRoles?: string[] 
 
 function AppContent() {
   const location = useLocation();
-  const showNavbar = location.pathname !== "/login" && location.pathname !== "/logout";
+  const isPortalRoute =
+    location.pathname.startsWith("/industry") ||
+    location.pathname.startsWith("/farmer") ||
+    location.pathname.startsWith("/admin") ||
+    location.pathname === "/training" ||
+    location.pathname === "/funding" ||
+    location.pathname === "/monitor";
+
+  const showNavbar =
+    !isPortalRoute && location.pathname !== "/login" && location.pathname !== "/logout";
 
   return (
     <div className="min-h-screen">
       {showNavbar && <Navbar />}
-      <Routes>
-        {/* PUBLIC ROUTES */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/logout" element={<Logout />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* PUBLIC ROUTES */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/logout" element={<Logout />} />
 
-        {/* 🔒 PROTECTED ROUTES */}
-        <Route
-          path="/farmer"
-          element={
-            <ProtectedRoute allowedRoles={["farmer"]}>
-              <FarmerDashboard />
-            </ProtectedRoute>
-          }
-        />
+          {/* 🔒 PROTECTED ROUTES */}
+          <Route
+            path="/farmer"
+            element={
+              <ProtectedRoute allowedRoles={["farmer"]}>
+                <FarmerDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/industry"
-          element={
-            <ProtectedRoute allowedRoles={["industry"]}>
-              <IndustryDashboard />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/industry"
+            element={
+              <ProtectedRoute allowedRoles={["industry"]}>
+                <IndustryDashboard />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/industry/profile"
-          element={
-            <ProtectedRoute allowedRoles={["industry"]}>
-              <IndustryProfile />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/industry/profile"
+            element={
+              <ProtectedRoute allowedRoles={["industry"]}>
+                <IndustryProfile />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/marketplace"
-          element={
-            <ProtectedRoute allowedRoles={["industry"]}>
-              <Marketplace />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/marketplace"
+            element={
+              <ProtectedRoute allowedRoles={["industry"]}>
+                <Marketplace />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/training"
-          element={
-            <ProtectedRoute allowedRoles={["farmer"]}>
-              <Training />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/training"
+            element={
+              <ProtectedRoute allowedRoles={["farmer"]}>
+                <Training />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/funding"
-          element={
-            <ProtectedRoute allowedRoles={["farmer"]}>
-              <Funding />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/funding"
+            element={
+              <ProtectedRoute allowedRoles={["farmer"]}>
+                <Funding />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/checkout"
-          element={
-            <ProtectedRoute allowedRoles={["industry"]}>
-              <Checkout />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute allowedRoles={["industry"]}>
+                <Checkout />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/confirmation"
-          element={
-            <ProtectedRoute allowedRoles={["industry"]}>
-              <Confirmation />
-            </ProtectedRoute>
-          }
-        />
-        
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <AdminPanel />
-            </ProtectedRoute>
-          }
-        />
-        
-        <Route
-          path="/monitor"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <FarmMonitor />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+          <Route
+            path="/confirmation"
+            element={
+              <ProtectedRoute allowedRoles={["industry"]}>
+                <Confirmation />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/monitor"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <FarmMonitor />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </Suspense>
     </div>
   );
 }
